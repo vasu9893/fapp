@@ -12,7 +12,6 @@ dependencies:
   webview_flutter: ^3.0.4
   intl: ^0.18.1  # For time formatting
   timer_builder: ^2.0.0  # For timed updates
-  firebase_core: ^3.9.0
 
 
 dev_dependencies:
