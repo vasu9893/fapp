@@ -1,11 +1,55 @@
+// ignore_for_file: avoid_print, unused_element, use_key_in_widget_constructors, library_private_types_in_public_api
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:hack/predictionbar.dart';
+import 'package:hack/redirect%20logic.dart';
+import 'package:hack/register%20popup.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'hackereffect.dart';
 
 class HackWingoApp extends StatefulWidget {
   @override
   _HackWingoAppState createState() => _HackWingoAppState();
+}
+
+class GameScreen extends StatefulWidget {
+  @override
+  _GameScreenState createState() => _GameScreenState();
+}
+
+class _GameScreenState extends State<GameScreen> {
+  bool _showPredictionBar = false;
+  String gameTimer = "00:30";
+  String wins = "0";
+  String losses = "0";
+  String prediction = "Big";
+  String periodNumber = "12";
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: PredictionAppBar(
+        gameTimer: gameTimer,
+        wins: wins,
+        losses: losses,
+        prediction: prediction,
+        periodNumber: periodNumber,
+      ),
+      body: Center(
+        child: ElevatedButton(
+          onPressed: () {
+            setState(() {
+              // Simulate updating the wins and losses
+              wins = "1";
+              losses = "0";
+            });
+          },
+          child: const Text("Update Results"),
+        ),
+      ),
+    );
+  }
 }
 
 class _HackWingoAppState extends State<HackWingoApp> {
@@ -14,18 +58,62 @@ class _HackWingoAppState extends State<HackWingoApp> {
   final String correctUserNumber = "8955559119";
   final String correctPassword = "krish0123";
 
+// Declare initial values for the game state
   String _gameTimer = "Loading...";
   String _gamePeriod = "Loading...";
   String _prediction = "Loading...";
+  int _wins = 0;
+  int _losses = 0;
   Color _predictionColor = Colors.green;
 
   Timer? _updateTimer;
   bool _showPredictionBar = false;
 
-  @override
+  void _checkPageUrl(String url) {
+    setState(() {
+      // Update visibility of PredictionAppBar based on URL
+      _showPredictionBar =
+          url.contains("/home/AllLotteryGames/WinGo?id=1"); // Only show here
+    });
+  }
+
   void initState() {
     super.initState();
+    _showHackerEffectPopup(); // Show the hacker effect popup
     _startTimerUpdates();
+  }
+
+  void _showHackerEffectPopup() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      showDialog(
+        context: context,
+        barrierDismissible: false, // Prevent dismissal
+        builder: (BuildContext context) {
+          return HackerEffectPopup(
+            onComplete: () {
+              Navigator.pop(context); // Close the popup after effect finishes
+            },
+          );
+        },
+      );
+    });
+  }
+
+  void _showRegisterPopup() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      showDialog(
+        context: context,
+        barrierDismissible:
+            false, // Prevent closing the dialog without user action
+        builder: (BuildContext context) {
+          return RegisterPopup(
+            onClose: () {
+              Navigator.pop(context); // Close the popup
+            },
+          );
+        },
+      );
+    });
   }
 
   void _startTimerUpdates() {
@@ -34,6 +122,11 @@ class _HackWingoAppState extends State<HackWingoApp> {
         await _fetchGameData();
       }
     });
+  }
+
+  void _injectRedirectLogic() {
+    final redirectScript = JavaScriptHelper.getRedirectLogicScript();
+    _webViewController.runJavascript(redirectScript);
   }
 
   Future<void> _fetchGameData() async {
@@ -113,12 +206,6 @@ class _HackWingoAppState extends State<HackWingoApp> {
     _webViewController.runJavascript(loginValidationScript);
   }
 
-  void _checkPageUrl(String url) {
-    setState(() {
-      _showPredictionBar = url.contains("/home/AllLotteryGames/WinGo?id=1");
-    });
-  }
-
   @override
   void dispose() {
     _updateTimer?.cancel();
@@ -129,73 +216,12 @@ class _HackWingoAppState extends State<HackWingoApp> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: _showPredictionBar
-          ? PreferredSize(
-              preferredSize: Size.fromHeight(110),
-              child: AppBar(
-                shape: const RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius.vertical(bottom: Radius.circular(20)),
-                ),
-                flexibleSpace: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF079436), Color(0xFF50C878)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                ),
-                title: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      "💸 HACK WINGO PREDICTION 💸",
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 5),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          "Game Timer: $_gameTimer",
-                          style: TextStyle(fontSize: 14, color: Colors.white70),
-                        ),
-                        Text(
-                          "Game Period: $_gamePeriod",
-                          style: TextStyle(fontSize: 14, color: Colors.white70),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                bottom: PreferredSize(
-                  preferredSize: const Size.fromHeight(50),
-                  child: Container(
-                    alignment: Alignment.center,
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 5, horizontal: 15),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 15, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: _predictionColor,
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      child: Text(
-                        _prediction,
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-                ),
-                backgroundColor: Colors.black,
-              ),
+          ? PredictionAppBar(
+              gameTimer: _gameTimer,
+              wins: _wins.toString(),
+              losses: _losses.toString(),
+              prediction: _prediction,
+              periodNumber: _gamePeriod,
             )
           : null,
       body: WebView(
