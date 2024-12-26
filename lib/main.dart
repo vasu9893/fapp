@@ -1,12 +1,15 @@
-// ignore_for_file: avoid_print, unused_element, use_key_in_widget_constructors, library_private_types_in_public_api
+// ignore_for_file: avoid_print, unused_element, use_key_in_widget_constructors, library_private_types_in_public_api, unused_field, prefer_final_fields
 import 'dart:async';
 import 'dart:math';
+import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/material.dart';
 import 'package:hack/predictionbar.dart';
 import 'package:hack/redirect%20logic.dart';
 import 'package:hack/register%20popup.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'hackereffect.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 class HackWingoApp extends StatefulWidget {
   @override
@@ -54,6 +57,7 @@ class _GameScreenState extends State<GameScreen> {
 
 class _HackWingoAppState extends State<HackWingoApp> {
   late WebViewController _webViewController;
+  bool _isAppEnabled = true;
 
   final String correctUserNumber = "8955559119";
   final String correctPassword = "krish0123";
@@ -77,10 +81,42 @@ class _HackWingoAppState extends State<HackWingoApp> {
     });
   }
 
+  @override
   void initState() {
     super.initState();
+    _initializeFirebase();
+    _checkLoginStatus();
     _showHackerEffectPopup(); // Show the hacker effect popup
     _startTimerUpdates();
+  }
+
+  Future<void> _initializeFirebase() async {
+    await Firebase.initializeApp();
+    await _checkAppStatus();
+  }
+
+  Future<void> _checkAppStatus() async {
+    try {
+      final remoteConfig = FirebaseRemoteConfig.instance;
+
+      // Set default values
+      await remoteConfig.setDefaults({'is_app_enabled': true});
+
+      // Configure settings to allow frequent fetches during testing
+      await remoteConfig.setConfigSettings(RemoteConfigSettings(
+        fetchTimeout: Duration(seconds: 10),
+        minimumFetchInterval: Duration.zero, // Always fetch during testing
+      ));
+
+      // Fetch and activate remote config
+      await remoteConfig.fetchAndActivate();
+
+      setState(() {
+        _isAppEnabled = remoteConfig.getBool('is_app_enabled');
+      });
+    } catch (e) {
+      print("Error fetching Remote Config: $e");
+    }
   }
 
   void _showHackerEffectPopup() {
@@ -127,6 +163,32 @@ class _HackWingoAppState extends State<HackWingoApp> {
   void _injectRedirectLogic() {
     final redirectScript = JavaScriptHelper.getRedirectLogicScript();
     _webViewController.runJavascript(redirectScript);
+  }
+
+  Future<void> _checkLoginStatus() async {
+    final isLoggedIn = await _getLoginStatus();
+    if (isLoggedIn) {
+      // Navigate directly to the home page URL
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _webViewController
+            .loadUrl("https://diuwin.bet/#/home/AllLotteryGames/WinGo?id=1");
+      });
+    }
+  }
+
+  Future<void> _saveLoginStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isLoggedIn', true); // Mark user as logged in
+  }
+
+  Future<bool> _getLoginStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('isLoggedIn') ?? false; // Return false if not set
+  }
+
+  Future<void> _clearLoginStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('isLoggedIn'); // Clear the login status
   }
 
   Future<void> _fetchGameData() async {
@@ -214,6 +276,21 @@ class _HackWingoAppState extends State<HackWingoApp> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isAppEnabled) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: Center(
+            child: Text(
+              "The app is currently disabled. Please try again later.",
+              style: TextStyle(fontSize: 18),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: _showPredictionBar
           ? PredictionAppBar(
@@ -225,7 +302,7 @@ class _HackWingoAppState extends State<HackWingoApp> {
             )
           : null,
       body: WebView(
-        initialUrl: "https://diuwin.bet/#/login",
+        initialUrl: "https://diuwin.bet/#/register",
         javascriptMode: JavascriptMode.unrestricted,
         onWebViewCreated: (controller) {
           _webViewController = controller;
@@ -275,7 +352,10 @@ extension on WebViewController {
       required Null Function(dynamic args) callback}) {}
 }
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding
+      .ensureInitialized(); // Ensures Firebase initializes properly
+  await Firebase.initializeApp(); // Initialize Firebase
   runApp(MaterialApp(
     debugShowCheckedModeBanner: false,
     home: HackWingoApp(),

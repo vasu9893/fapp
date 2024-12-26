@@ -1,21 +1,19 @@
-// ignore_for_file: file_names
-
 import 'package:flutter/material.dart';
 
 class RegisterPopup extends StatelessWidget {
   final VoidCallback onClose;
 
-  const RegisterPopup({super.key, required this.onClose});
+  const RegisterPopup({required this.onClose});
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text("Welcome!"),
-      content: Text("Please register to continue using the app."),
+      title: const Text("Register"),
+      content: const Text("Please register to continue."),
       actions: [
         TextButton(
           onPressed: onClose,
-          child: Text("OK"),
+          child: const Text("Close"),
         ),
       ],
     );

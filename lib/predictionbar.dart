@@ -1,48 +1,109 @@
+// ignore_for_file: use_super_parameters, library_private_types_in_public_api, deprecated_member_use, use_key_in_widget_constructors, unnecessary_string_interpolations
+
 import 'package:flutter/material.dart';
-import 'dart:async';
-import 'package:html/parser.dart' as html;
+import 'package:google_fonts/google_fonts.dart';
+import 'dart:math';
 
-class GameLogic {
-  int wins = 0;
-  int losses = 0;
-  String gameTimer = "00:00";
+class AdvancedMatrixEffect extends StatefulWidget {
+  final double height;
+  final double width;
 
-  void updateResults(
-      String htmlContent, String prediction, String periodNumber) {
-    // Parse the HTML content
-    final document = html.parse(htmlContent);
-    final spans = document.getElementsByTagName('span');
+  const AdvancedMatrixEffect(
+      {required this.height, required this.width, Key? key})
+      : super(key: key);
 
-    // Find the result for the current period
-    String result = "";
-    for (var span in spans) {
-      if (span.text == "Small" || span.text == "Big") {
-        result = span.text;
-      }
-    }
+  @override
+  _AdvancedMatrixEffectState createState() => _AdvancedMatrixEffectState();
+}
 
-    // Update wins or losses
-    if (result == prediction) {
-      wins++;
-    } else {
-      losses++;
-    }
+class _AdvancedMatrixEffectState extends State<AdvancedMatrixEffect>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late List<List<String>> _matrix;
+  late int rows, columns;
+
+  @override
+  void initState() {
+    super.initState();
+
+    rows = (widget.height / 20).ceil();
+    columns = (widget.width / 12).ceil();
+    _matrix = List.generate(
+        rows, (_) => List.generate(columns, (_) => _randomChar()));
+
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 100))
+      ..addListener(() {
+        setState(() {
+          for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < columns; j++) {
+              if (Random().nextDouble() > 0.95) {
+                _matrix[i][j] = _randomChar();
+              }
+            }
+          }
+        });
+      })
+      ..repeat();
   }
 
-  void startGameTimer() {
-    Timer.periodic(const Duration(seconds: 1), (timer) {
-      // Update the game timer (dummy implementation)
-      gameTimer = "00:${timer.tick.toString().padLeft(2, '0')}";
-    });
+  String _randomChar() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    return chars[Random().nextInt(chars.length)];
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size(widget.width, widget.height),
+      painter: MatrixPainter(_matrix, rows, columns),
+    );
   }
 }
 
+class MatrixPainter extends CustomPainter {
+  final List<List<String>> matrix;
+  final int rows;
+  final int columns;
+
+  MatrixPainter(this.matrix, this.rows, this.columns);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+    );
+
+    for (int i = 0; i < rows; i++) {
+      for (int j = 0; j < columns; j++) {
+        final textStyle = TextStyle(
+          color: Colors.greenAccent.shade400.withOpacity(Random().nextDouble()),
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        );
+        textPainter.text = TextSpan(text: matrix[i][j], style: textStyle);
+        textPainter.layout();
+        textPainter.paint(canvas, Offset(j * 12.0, i * 20.0));
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
 class PredictionAppBar extends StatelessWidget implements PreferredSizeWidget {
-  final String gameTimer; // Game timer
-  final String wins; // Wins count
-  final String losses; // Losses count
-  final String prediction; // Prediction: "Small" or "Big"
-  final String periodNumber; // Current period number
+  final String gameTimer;
+  final String wins;
+  final String losses;
+  final String prediction;
+  final String periodNumber;
 
   const PredictionAppBar({
     required this.gameTimer,
@@ -54,143 +115,176 @@ class PredictionAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isBig = prediction.toLowerCase() == 'big';
+
     return PreferredSize(
-      preferredSize: const Size.fromHeight(180),
-      child: AppBar(
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
-        ),
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.green.shade900, Colors.green.shade600],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+      preferredSize: const Size.fromHeight(310),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF3AAF4D), Color(0xFF01CE86)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
           ),
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
+        ),
+        child: AppBar(
+          backgroundColor:
+              Colors.transparent, // Make AppBar background transparent
+          elevation: 0,
+          flexibleSpace: Padding(
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 0,
+              left: 7,
+              right: 7,
+            ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Header
-                Row(
-                  children: [
-                    const Icon(Icons.money, color: Colors.white, size: 28),
-                    const SizedBox(width: 8),
-                    Text(
-                      "Hack WinGo Prediction",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.greenAccent,
-                        fontFamily: 'SFPro',
+                // Title: Hack Wingo Prediction
+                Center(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.8), // Black overlay
+                      border: Border.all(
+                        color: Colors.lightGreenAccent,
+                        width: 0,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      "💸 DiuWin Hack Prediction 💸",
+                      style: GoogleFonts.roboto(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.redAccent,
                       ),
                     ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 8),
-
-                // Game timer and period number
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "Game Timer: $gameTimer",
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.white,
-                        fontFamily: 'SFPro',
+                const SizedBox(height: 4),
+                // Combined container with a white line
+                Container(
+                  height: 95,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      // Left half: Confined Matrix effect
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(15),
+                          child: AdvancedMatrixEffect(
+                            height: 200,
+                            width: MediaQuery.of(context).size.width / 2,
+                          ),
+                        ),
                       ),
-                    ),
-                    Text(
-                      "Period: $periodNumber",
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.white,
-                        fontFamily: 'SFPro',
+                      Container(
+                        width: 1,
+                        color: Colors.white, // White line separator
                       ),
-                    ),
-                  ],
+                      // Right half: Game details
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Game timer
+                              Text(
+                                "Time: $gameTimer",
+                                style: GoogleFonts.roboto(
+                                  fontSize: 14,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              // Period number
+                              Text(
+                                "$periodNumber",
+                                style: GoogleFonts.roboto(
+                                  fontSize: 14,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 7),
+                              // Wins and losses
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.check_circle,
+                                          color: Colors.greenAccent, size: 18),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        "$wins Wins",
+                                        style: GoogleFonts.roboto(
+                                          fontSize: 14,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.cancel,
+                                          color: Colors.redAccent, size: 18),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        "$losses Losses",
+                                        style: GoogleFonts.roboto(
+                                          fontSize: 14,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 8),
-
-                // Wins, losses, prediction, and multiplier
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "$wins win",
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Colors.greenAccent,
-                            fontFamily: 'SFPro',
-                          ),
-                        ),
-                        Text(
-                          "$losses Lose",
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Colors.redAccent,
-                            fontFamily: 'SFPro',
-                          ),
-                        ),
-                      ],
+                const SizedBox(height: 5),
+                // Centered Prediction Box
+                Container(
+                  alignment: Alignment.center,
+                  width: MediaQuery.of(context).size.width * 0.3,
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isBig ? Colors.yellow : Colors.blue,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    prediction,
+                    style: GoogleFonts.roboto(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w900,
+                      color: isBig ? Colors.red : Colors.white,
                     ),
-                    Column(
-                      children: [
-                        const Text(
-                          "Next Result Is :-",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.white,
-                            fontFamily: 'SFPro',
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16.0, vertical: 8.0),
-                          decoration: BoxDecoration(
-                            color: Colors.orange,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            prediction,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontFamily: 'SFPro',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      "1x",
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.orangeAccent,
-                        fontFamily: 'SFPro',
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
           ),
         ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
       ),
     );
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(180);
+  Size get preferredSize => const Size.fromHeight(185);
 }
