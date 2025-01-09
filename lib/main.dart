@@ -1,4 +1,4 @@
-// ignore_for_file: unused_field, unused_element, use_key_in_widget_constructors, library_private_types_in_public_api, prefer_final_fields, avoid_print
+// ignore_for_file: unused_field, unused_element, use_key_in_widget_constructors, library_private_types_in_public_api, prefer_final_fields, avoid_print, prefer_typing_uninitialized_variables
 
 import 'dart:async';
 import 'dart:math';
@@ -180,7 +180,7 @@ class _HackWingoAppState extends State<HackWingoApp> {
   bool _isLoginButtonEnabled = false;
 
   final String apiUrl =
-      'http://your_api_url:3000/api'; // Update with your API URL
+      'https://auth-d0ci.onrender.com/api'; // Update with your API URL
 
   Future<bool> _checkUsername(String phone) async {
     try {

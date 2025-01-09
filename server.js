@@ -8,9 +8,19 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB connection
-mongoose.connect('mongodb+srv://vasu:YblCSJx1R77jsk2c@cluster0.71son.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
+mongoose.connect('mongodb+srv://vasu:vasu123@cluster0.71son.mongodb.net/?retryWrites=true&w=majority')
   .then(() => console.log('Connected to MongoDB successfully'))
   .catch(err => console.error('MongoDB connection error:', err));
+
+// Add a test route for /api
+app.get('/api', (req, res) => {
+  res.json({ message: 'API is working!' });
+});
+
+// Add a test route for root
+app.get('/', (req, res) => {
+  res.json({ message: 'Server is running!' });
+});
 
 // User Schema
 const userSchema = new mongoose.Schema({
@@ -90,7 +100,7 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(process.env.PORT || 8080, () => {
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
