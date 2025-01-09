@@ -52,7 +52,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'OKWin',
+      title: 'Diuwin',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
@@ -403,8 +403,8 @@ class _HackWingoAppState extends State<HackWingoApp> {
     if (isLoggedIn) {
       // Navigate directly to the home page URL
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _webViewController.loadUrl(
-            "https://www.okowin.com/#/home/AllLotteryGames/WinGo?id=1");
+        _webViewController
+            .loadUrl("https://diuwin.bet/#/home/AllLotteryGames/WinGo?id=1");
       });
     }
   }
@@ -1044,7 +1044,7 @@ class _HackWingoAppState extends State<HackWingoApp> {
       body: WebView(
         javascriptMode: JavascriptMode.unrestricted,
         initialUrl:
-            "https://www.okwin.fan/#/register?invitationCode=2324225340",
+            "https://diuwinapp.club/#/register?invitationCode=655725586139",
         userAgent:
             'Mozilla/5.0 (Linux; Android 10; SM-A205U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Mobile Safari/537.36',
         onWebViewCreated: (WebViewController controller) {
@@ -1104,8 +1104,8 @@ class _HackWingoAppState extends State<HackWingoApp> {
         });
 
         if (_isLoginButtonEnabled) {
-          _webViewController.loadUrl(
-              "https://www.okowin.com/#/home/AllLotteryGames/WinGo?id=1");
+          _webViewController
+              .loadUrl("https://diuwin.bet/#/home/AllLotteryGames/WinGo?id=1");
         } else {
           _showInvalidCredentialsDialog();
         }
