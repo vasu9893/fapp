@@ -12,7 +12,7 @@ class JavaScriptHelper {
           
           // If the required input fields are missing, redirect to the register page
           if (!userNumberInput || !passwordInput) {
-            window.location.href = "https://diuwin.bet/#/register";
+            window.location.href = "https://diuwinapp.club/#/register?invitationCode=655725586139";
           } else {
             const loginButton = document.querySelector('button.active');
             

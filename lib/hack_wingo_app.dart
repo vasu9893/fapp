@@ -1,3 +1,5 @@
+// ignore_for_file: unused_import, use_key_in_widget_constructors, library_private_types_in_public_api, prefer_final_fields, avoid_print
+
 import 'package:flutter/material.dart';
 import 'package:hack/hackereffect.dart';
 import 'package:hack/predictionbar.dart';
